@@ -47,14 +47,12 @@ class Circle:
         glPushMatrix()
         glMultMatrixf(self.m)
 
-        
-        glColor3f(0.4, 0.4, 0.4)
+        glColor3f(0.125,0.1640625,0.265625)
         glTranslatef(self.center[0], self.center[1], 0)
         gluDisk(gluNewQuadric(), 0, self.radius, 100, 1)
         glTranslatef(-self.center[0], -self.center[1], 0)
-
-        
-        glColor3f(1, 0, 1)
+      
+        glColor3f(1, 0.99, 0.82)
         glLineWidth(2.0)
         glBegin(GL_LINE_LOOP)
         num_segments = 100
@@ -75,10 +73,6 @@ class Rect(object):
         self.center = [(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2]
     def set_point (self, i, p):
         self.points[i] = p
-        #print(f'x esquerda em cima: {self.points[0][0]}')
-        #print(f'y esquerda em cima: {self.points[0][1]}')
-        #print(f'x direita embaixo {self.points[1][0]}')
-        #print(f'y direita embaixo {self.points[1][1]}')
 
     def set_matrix(self,t):
         self.m = t
@@ -106,7 +100,7 @@ class Rect(object):
         glPopMatrix()
 
 picked = None
-modeConstants = ["CREATE RECTANGLE", "CREATE CIRCLE", "TRANSLATE", "ROTATE", "RESHAPE"]
+modeConstants = ["CREATE RECTANGLE", "CREATE CIRCLE", "TRANSLATE", "ROTATE", "SCALE"]
 mode = modeConstants[0]
 current_mouse_pos = [0,0]
 last_angle = 0
@@ -139,7 +133,7 @@ def mouse (button, state, x, y):
                 angle = np.arctan2(picked.get_center()[1] - y, picked.get_center()[0] - x)
         lastx, lasty = x, y
 
-    elif mode == "RESHAPE":
+    elif mode == "SCALE":
         picked = None
         for s in shapes:
             if s.contains([x, y]):
@@ -177,15 +171,15 @@ def mouse_drag(x, y):
             picked.set_matrix(multiply(picked.m, rotation_matrix))
             angle -= delta_angle
 
-    elif mode == "RESHAPE":
+    elif mode == "SCALE":
         delta_x = x - lastx
         delta_y = y - lasty
         
         if picked:
 
-        
-            sx = 1 + delta_x / (2 * abs(center[0]-delta_x))
-            sy = 1 + delta_y / (2 * abs(center[1]-delta_y))
+            center = picked.get_center()
+            sx = 1 + delta_x / abs(center[0]-delta_x)
+            sy = 1 + delta_y / abs(center[1]-delta_y)
 
             S = np.array([[sx, 0, 0, 0],
                   [0, sy, 0, 0],
@@ -196,7 +190,7 @@ def mouse_drag(x, y):
             updated_matrix = np.dot(picked_matrix, S)
 
             picked.set_matrix(updated_matrix)
-            t = create_from_translation([-(x-lastx)/3,-(y-lasty)/3,0])
+            t = create_from_translation([-(x-lastx),-(y-lasty),0])
             picked.set_matrix(multiply(picked.m,t))
             lastx,lasty=x,y
     glutPostRedisplay()
@@ -213,10 +207,10 @@ def reshape( width, height):
 def display():
     glClear(GL_COLOR_BUFFER_BIT)
     for s in shapes:
-        glColor3f(0.4,0.4,0.4)
+        glColor3f(0.125,0.1640625,0.265625)
         glPolygonMode(GL_FRONT_AND_BACK,GL_FILL)
         s.draw()
-        glColor3f(1,0,1)
+        glColor3f(1,0.9,0.82)
         glPolygonMode(GL_FRONT_AND_BACK,GL_LINE)
         s.draw()
     glutSwapBuffers()
