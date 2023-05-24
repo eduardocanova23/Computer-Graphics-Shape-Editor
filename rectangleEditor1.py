@@ -61,7 +61,11 @@ class Circle:
         distance = math.sqrt((p[0] - cx) ** 2 + (p[1] - cy) ** 2)
         return distance <= self.radius
 
-    
+    def get_center(self):
+        x_center = self.center[0]
+        y_center = self.center[1]
+        center_vector = apply_to_vector(self.m, [x_center, y_center, 0, 1])
+        return center_vector[:2]
 
     def draw(self):
         glPushMatrix()
@@ -148,8 +152,11 @@ class Rect(object):
         self.invm = inverse(t)
     
     def get_center(self):
-        return [(self.points[0][0] + self.points[1][0]) / 2, (self.points[0][1] + self.points[1][1]) / 2]
-
+        #return [(self.points[0][0] + self.points[1][0]) / 2, (self.points[0][1] + self.points[1][1]) / 2]
+        x_center = (self.points[0][0] + self.points[1][0]) / 2
+        y_center = (self.points[0][1] + self.points[1][1]) / 2
+        center_vector = apply_to_vector(self.m, [x_center, y_center, 0, 1])
+        return center_vector[:2]
 
     def contains(self,p):
         p = apply_to_vector(self.invm, [p[0],p[1],0,1])
@@ -174,12 +181,7 @@ current_mouse_pos = [0,0]
 last_angle = 0
 angle = 0
 
-def reshape( width, height):
-    glViewport(0,0,width,height)
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    gluOrtho2D(0,width,height,0)
-    glMatrixMode (GL_MODELVIEW)
+
 
 def mouse (button, state, x, y):
     global lastx,lasty,picked,lastx_whenclicked,lasty_whenclicked,angle, last_angle
@@ -193,12 +195,13 @@ def mouse (button, state, x, y):
         if shape == "RECTANGLE":
             shapes.append(Rect([[x,y],[x,y]]))
         elif shape == "CIRCLE":
-            shapes.append(Ellipse([x,y], 0,0))
+            shapes.append(Circle([x,y], 0))
     elif mode == "TRANSLATE":
         picked = None
         for s in shapes:
             if s.contains([x,y]): picked = s
         lastx,lasty = x,y
+        
     elif mode == "ROTATE":
         picked = None
         for s in shapes:
@@ -223,7 +226,7 @@ def mouse_drag(x, y):
         if shape == "RECTANGLE":
             shapes[-1].set_point(1,[x,y])
         elif shape == "CIRCLE":
-            shapes[-1].set_radii(euclidean_distance(shapes[-1].center,[x,y]),euclidean_distance(shapes[-1].center,[x,y]))
+            shapes[-1].set_radius(euclidean_distance(shapes[-1].center,[x,y]))
     elif mode == "TRANSLATE":
         if picked:
             delta_x = x - lastx
@@ -232,11 +235,12 @@ def mouse_drag(x, y):
             #picked.set_point(1, [picked.points[1][0]+delta_x,picked.points[1][1]+delta_y])
             t = create_from_translation([x-lastx,y-lasty,0])
             picked.set_matrix(multiply(picked.m,t))
-            transformed_points = apply_to_points(picked.m, picked.points)
-            print(int(transformed_points[0][1]))
-            picked.set_point(0,int(transformed_points[0][0]),int(transformed_points[0][1]))
-            picked.set_point(1,int(transformed_points[1][0]),int(transformed_points[1][1]))
+            #transformed_points = apply_to_points(picked.m, picked.points)
+            #print(int(transformed_points[0][1]))
+            #picked.set_point(0,int(transformed_points[0][0]),int(transformed_points[0][1]))
+            #picked.set_point(1,int(transformed_points[1][0]),int(transformed_points[1][1]))
             lastx,lasty=x,y
+            #picked.updatePoints()
     elif mode == "ROTATE":
          if picked:
             center = picked.get_center()
@@ -251,32 +255,46 @@ def mouse_drag(x, y):
             angle -= delta_angle
 
     elif mode == "RESHAPE":
-        #print(f'x esquerda em cima: {self.points[0][0]}')
-        #print(f'y esquerda em cima: {self.points[0][1]}')
-        #print(f'x direita embaixo {self.points[1][0]}')
-        #print(f'y direita embaixo {self.points[1][1]}')
+        delta_x = x - lastx
+        delta_y = y - lasty
         
-        if picked:
-            original_center = picked.get_center()
-            delta_x = x - lastx
-            delta_y = y - lasty
-            if lastx_whenclicked < original_center[0]:
-                if lasty_whenclicked < original_center[1]:
-                    picked.set_point(0, [picked.points[0][0]+delta_x,picked.points[0][1]+delta_y])
-                elif lasty_whenclicked > original_center[1]:
-                    picked.set_point(0, [picked.points[0][0]+delta_x,picked.points[0][1]])
-                    picked.set_point(1, [picked.points[1][0],picked.points[1][1]+delta_y])
+        center = picked.get_center()
 
-            elif lastx_whenclicked > original_center[0]:
-                if lasty_whenclicked < original_center[1]:
-                    picked.set_point(1, [picked.points[1][0]+delta_x,picked.points[1][1]])
-                    picked.set_point(0, [picked.points[0][0],picked.points[0][1]+delta_y])
-                elif lasty_whenclicked > original_center[1]:
-                    
-                    picked.set_point(1, [picked.points[1][0]+delta_x,picked.points[1][1]+delta_y])
+        # Calculate scaling factors
 
+        
+        sx = 1 + delta_x / (2 * abs(center[0]-delta_x))
+        sy = 1 + delta_y / (2 * abs(center[1]-delta_y))
+
+        # Create the scaling matrix
+        S = np.array([[sx, 0, 0, 0],
+                  [0, sy, 0, 0],
+                  [0, 0, 1, 0],
+                  [0, 0, 0, 1]])
+
+        # Apply matrix multiplication to update the picked shape's matrix
+        picked_matrix = picked.m
+        updated_matrix = np.dot(picked_matrix, S)
+
+        # Update the shape's matrix
+        picked.set_matrix(updated_matrix)
+        t = create_from_translation([-(x-lastx)/3,-(y-lasty)/3,0])
+        picked.set_matrix(multiply(picked.m,t))
         lastx,lasty=x,y
     glutPostRedisplay()
+
+#print(f'x esquerda em cima: {self.points[0][0]}')
+#print(f'y esquerda em cima: {self.points[0][1]}')
+#print(f'x direita embaixo {self.points[1][0]}')
+#print(f'y direita embaixo {self.points[1][1]}')
+
+def reshape( width, height):
+    glViewport(0,0,width,height)
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    gluOrtho2D(0,width,height,0)
+    glMatrixMode (GL_MODELVIEW)
+
 
 def display():
     glClear(GL_COLOR_BUFFER_BIT)
